@@ -253,7 +253,7 @@ try {
         secure:true
     }
     //generating new token 
-    const {accessToken,newRefreshToken}=generateAccessAndRefreshToken(user._id)
+    const {accessToken,newRefreshToken}=generateAccessAndRefreshToken(user._id) //doubt here he is only id then how payload is generated
     
     return res.status(200)
     .cookie("accessToken",accessToken,options)
@@ -269,10 +269,158 @@ try {
 } catch (error) {
     throw new ApiError(401, error?.message || "Invalid refresh token")
 
+
 }
 
 
 })
 
+//5->> change password
+const changeCurrentPassword= asyncHandler(async (req,res)=>{
+    //taking input from the body in postman 
+const {oldPassword,newPassword}=req.body
 
-export { registerUser, loginUser, logoutUser }
+//since the user wlll aready be loggedin hence finding him by id
+ const user=User.findById(req.user?._id) 
+
+ //now compare the old password
+ const isPasswordCorrect =await user.isPasswordCorrect(oldPassword)
+//vlidation
+ if (!isPasswordCorrect) {
+    throw new ApiError(400, "Invalid old password")
+}
+//setting the newpasssword to user model
+user.password = newPassword
+    await user.save({validateBeforeSave: false})
+
+    //returning the response
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password changed successfully"))
+
+})
+
+//6->> get current user 
+const getCurrentUser = asyncHandler(async(req, res) => {
+    return res
+    .status(200)
+    .json(new ApiResponse(
+        200,
+        req.user,
+        "User fetched successfully"
+    ))
+})
+
+//7->>  updateing textbases data
+const updateAccountDetails = asyncHandler(async (req,res)=>{
+//data to update    
+const {fullName, email}= req.body
+
+//handling 
+if (!fullName || !email) {
+    throw new ApiError(400, "All fields are required")
+}
+
+//findinng the user by id and updateing the 
+const user = await User.findByIdAndUpdate(
+    req.user?._id,
+    {
+        //mongodb operator
+        $set: {
+            fullName, // new syntax
+            email: email
+        }
+    },
+    {new: true}
+    
+).select("-password")
+
+return res
+.status(200)
+.json(new ApiResponse(200, user, "Account details updated successfully"))
+
+
+})
+
+
+//8->>> avatr update 
+const updateUserAvatar=asyncHandler(async(req,res)=>{
+
+    //taking the loacal path of avatar file
+    const avatarLocalPath=req.file?.path //"file " not "files" becoause we are selecting only one image "avatar"
+    //validation
+    if (!avatarLocalPath) {
+        throw new ApiError(400, "Avatar file is missing")
+    }
+
+    //steps: delete old image - new assignment
+
+    //uploading to cloudinary from the local path 
+    const avatar=await uploadOnCloudinary(avatarLocalPath)
+    //validationg 
+    if (!avatar.url) {
+        throw new ApiError(400, "Error while uploading on avatar")
+        
+    }
+
+    //now "avatar is the object storing all the details after the uplade in cludinary "
+    //updating in the database the new string link of image from cloudinary 
+    const user=await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:
+            {
+                "avatar":avatar.url //from cloudinary ->> saved to db (updated string link)
+            }
+        },
+        {new:true}
+    ).select("-password")
+
+    return res.status(200)
+    .json(
+        new ApiResponse(200,user,"update dthe avatarimage ")
+    )
+})
+
+//9->cover image update
+const updateUserCoverImage =asyncHandler(async(req,res)=>{
+
+    //taking the loacal path of cover  file
+    const coverImageLocalPath=req.file?.path
+    //validation
+    if (!coverImageLocalPath) {
+        throw new ApiError(400, "cover image file is missing")
+    }
+
+    //steps: delete old image - new assignment
+
+    //uploading to cloudinary from the local path 
+    const coverImage =await uploadOnCloudinary(coverImageLocalPath)
+    //validationg 
+    if (!coverImage .url) {
+        throw new ApiError(400, "Error while uploading on avatar")
+        
+    }
+
+    //now "coverImage  is the object storing all the details after the uplade in cludinary "
+    //updating in the database the new string link of image from cloudinary 
+    const user=await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:
+            {
+                "coverImage ":coverImage .url //from cloudinary ->> saved to db (updated string link)
+            }
+        },
+        {new:true}
+    ).select("-password")
+
+    return res.status(200)
+    .json(
+        new ApiResponse(200,user,"update dthe coverImage  ")
+    )
+})
+
+
+export { registerUser, loginUser, logoutUser,  refreshAccessToken ,changeCurrentPassword,getCurrentUser,updateAccountDetails,updateUserAvatar,updateUserCoverImage}
